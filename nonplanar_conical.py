@@ -6,7 +6,7 @@
 # name = "Nonplanar Conical"
 # description = "Konische (nicht-planare) Schichten: Überhänge bis ca. 45° + Kegelwinkel ohne Stützen drucken. Abgestimmt auf den Flashforge Adventurer 5M."
 # author = "nonplanar"
-# version = "0.1.0"
+# version = "0.1.1"
 # ///
 """Conical (non-planar) slicing for OrcaSlicer.
 
@@ -259,7 +259,7 @@ def detect_axis(lines: list) -> tuple[float, float]:
     feature = ""
     bx0 = by0 = math.inf
     bx1 = by1 = -math.inf
-    for line in lines[:end]:
+    for i, line in enumerate(lines[:end]):
         if line.startswith(";TYPE:"):
             feature = line[6:].strip().lower()
             continue
@@ -281,7 +281,8 @@ def detect_axis(lines: list) -> tuple[float, float]:
             if "E" in w:
                 de = w["E"] if rel_e else w["E"] - e
                 e += de
-            if (de > 0 and (nx, ny) != (x, y)
+            # i >= start: a purge line in the start G-code is not the part.
+            if (i >= start and de > 0 and (nx, ny) != (x, y)
                     and not feature.startswith(AXIS_IGNORED_FEATURES)):
                 bx0, bx1 = min(bx0, x, nx), max(bx1, x, nx)
                 by0, by1 = min(by0, y, ny), max(by1, y, ny)
@@ -550,6 +551,9 @@ if orca is not None:
                 raise ConicalError("Bitte 'Arc fitting' ausschalten.")
             if "spiral" in str(ctx.config_value("z_hop_types")).lower():
                 raise ConicalError("Bitte keinen 'Spiral'-Z-Hop verwenden (Auto/Normal/Slope geht).")
+            if str(ctx.config_value("make_overhang_printable")).lower() in ("1", "true"):
+                # It adds material to the deformed mesh, which would come out distorted.
+                raise ConicalError("Bitte 'Make overhangs printable' (Überhänge druckbar machen) ausschalten.")
             if str(ctx.config_value("spiral_mode")).lower() in ("1", "true"):
                 raise ConicalError("Vasenmodus wird mit konischen Schichten nicht unterstützt.")
 

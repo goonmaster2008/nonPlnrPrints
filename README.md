@@ -1,121 +1,179 @@
 <img src="assets/icon.svg" width="64" height="64" alt="">
 
-# nonplanar – konische Schichten für OrcaSlicer
+# nonplanar – Überhänge ohne Stützen drucken (OrcaSlicer-Plugin für den AD5M)
 
-OrcaSlicer-Plugin (ab Orca 2.5), das Teile in **kegelförmigen statt flachen
-Schichten** druckt, abgestimmt auf den **Flashforge Adventurer 5M**. Jeder nach
-außen zeigende Überhang wird dadurch um den Kegelwinkel „entschärft“: Mit 15°
-druckt ein 60°-Überhang wie ein 45°-Überhang, also **ohne Stützen**.
+Dieses Plugin für **OrcaSlicer 2.5 oder neuer** druckt Teile in
+**kegelförmigen statt flachen Schichten**. Dadurch halten Überhänge, die nach
+außen zeigen, **ohne Stützen**. Es ist auf den **Flashforge Adventurer 5M**
+abgestimmt.
 
-Typische Kandidaten sind Pilzformen, nach außen ausladende Becher, Schalen und
-Lampenschirme, Kragen, Ränder und angefaste Unterseiten.
+**Faustregel:** Mit dem Standardwinkel 15° druckt ein 60°-Überhang so, als
+wäre er nur 45° steil.
 
-Keine Wunder erwarten: Waagrechte Decken, Brücken und Überhänge, die *zur
-Mitte* zeigen, werden nicht besser. Nach innen zeigende Überhänge werden sogar
-um den Kegelwinkel schlechter.
+| Dafür ist es gut | Dafür ist es nichts |
+|---|---|
+| Pilzformen, Schalen, Becher mit ausladendem Rand | Waagrechte Decken und Brücken |
+| Lampenschirme, Kragen, Trichter | Überhänge, die **zur Mitte** zeigen (werden schlechter!) |
+| Angefaste Unterseiten | Mehrere Teile auf einer Platte |
 
-## So funktioniert es
+> **Achtung, bitte lesen:** Bei schrägen Schichten kann der Druckkopf an schon
+> gedrucktes Material stoßen. Bleib beim ersten Druck **am Drucker stehen**,
+> nimm ein kleines Teil und lass den Winkel auf 15°. Mehr dazu unter
+> [Kegelwinkel und Kollision](#kegelwinkel-und-kollision). Benutzung auf
+> eigene Gefahr.
 
-Orca kann nicht auf Kegelflächen slicen, deshalb nutzt das Plugin den bekannten
-Transformations-Trick (Wüthrich et al., *A Novel Slicing Strategy to Print
-Overhangs without Support Material*, Applied Sciences 2021):
+---
 
-1. **Konisch vorbereiten**: Das Modell wird verformt, mit
-   `z' = z + min(r·tan α, z − z₀)` (r = Abstand zur Kegelachse,
-   z₀ = erste Schichthöhe). Orca slict dieses verzerrte Modell ganz normal,
-   mit allen eigenen Wänden, Füllungen, Nähten und Flussberechnungen.
-2. **Konische Schichten**: Beim Export rechnet das Plugin jede Bewegung im
-   G-Code zurück auf die Kegelfläche. Lange Bewegungen werden dabei
-   unterteilt, damit sie der Fläche folgen (Toleranz 0,01 mm). Das gilt auch
-   für Leerfahrten, damit die Düse nicht durch die Kegelspitze fährt. Die
-   Extrusion wird an die tatsächliche Schichtdicke angepasst.
+## Schritt 1: Einmalig einrichten (ca. 5 Minuten)
 
-Die erste Schicht bleibt flach. Darüber wächst der Kegel aus einer Rampe mit
-halb so dicken Schichten heraus, statt in der Luft zu beginnen oder ins Bett zu
-fahren.
+### 1.1 Plugin herunterladen
 
-## Installation
+Klick oben in der Dateiliste auf **`nonplanar_conical.py`** und dann rechts
+auf das Download-Symbol (**Download raw file**). Mehr als diese eine Datei
+brauchst du nicht.
 
-1. OrcaSlicer ≥ 2.5 → **Plugins** → *Install local plugin* →
-   `nonplanar_conical.py` auswählen. Alternativ die Datei nach
-   `%APPDATA%\OrcaSlicer\orca_plugins\nonplanar_conical\` kopieren und Orca
-   neu starten. `numpy` installiert Orca beim ersten Laden selbst, dafür ist
-   Internet nötig.
-2. Ein Prozessprofil für den konischen Druck anlegen, z. B. *0.20mm Standard
-   @Flashforge AD5M 0.4 Nozzle* kopieren und „AD5M Konisch 15°“ nennen:
-   - **Others → Slicing Pipeline Plugin:** *Konische Schichten*
-   - **Support:** aus. Die Stützen sollen ja wegfallen. Eingeschaltete Stützen
-     funktionieren aber auch, sie werden dann ebenfalls konisch.
-   - **Arc fitting:** aus (Standard beim AD5M). **Z-Hop:** *Auto*, *Normal*
-     oder *Slope*, aber nicht *Spiral*.
-3. Den Kegelwinkel stellst du unter Plugins → *Konische Schichten* → Config
-   ein: `{"cone_angle_deg": 15}`.
+### 1.2 Plugin in OrcaSlicer installieren
 
-## Benutzung
+1. OrcaSlicer öffnen (Version **2.5 oder neuer**, sonst gibt es kein
+   Plugin-Menü).
+2. **Plugins** öffnen → **Install local plugin** → die heruntergeladene
+   `nonplanar_conical.py` auswählen.
+3. Beim ersten Mal lädt Orca das Paket `numpy` nach. Dafür brauchst du
+   **Internet**. Kurz warten.
+4. In der Plugin-Liste steht jetzt **Nonplanar Conical** mit zwei Funktionen:
+   **Konisch vorbereiten** und **Konische Schichten**.
 
-1. Modell laden, ausrichten und skalieren. Nach dem Vorbereiten ist das
-   nicht mehr erlaubt.
-2. Plugins → **Konisch vorbereiten** ausführen. Das Plugin schreibt
-   `<name>_konisch_a15_z0.2.stl` neben die Originaldatei. Darf es dort nicht
-   schreiben, landet die Datei im Plugin-Ordner. Den Pfad zeigt ein Dialog an.
-3. Diese STL importieren, das Original von der Platte löschen und das
-   Konisch-Profil wählen.
-4. Slicen und exportieren oder an den Drucker senden.
+### 1.3 Ein eigenes Druckprofil anlegen
 
-Gut zu wissen:
+Du brauchst ein eigenes Prozessprofil, damit deine normalen Drucke unberührt
+bleiben.
 
-- **Die Vorschau in Orca zeigt das verzerrte Modell.** Das ist normal. Den
-  echten konischen Druck siehst du, wenn du den exportierten `.gcode` wieder
-  in Orca öffnest.
-- Pro Platte nur **ein Objekt mit einer Kopie**, denn jedes Objekt braucht
-  eine eigene Kegelachse.
-- Beim Slicen prüft das Plugin, ob das Objekt vorbereitet ist, ob Winkel und
-  erste Schicht noch zum Profil passen und ob nach dem Vorbereiten gedreht oder
-  skaliert wurde. Falls nicht, bricht es mit einer Meldung ab. Schlägt die
-  Rücktransformation fehl, wird der G-Code geleert, damit nie ein falscher
-  Druck startet.
-- Die Kegelachse liegt in der Mitte des Modells (Mitte der Bounding Box).
-  Überhänge sollten also von der Mitte weg zeigen.
-- Die Oberseite des Teils zeigt feine, ringförmige Stufen. Die Zeitschätzung
-  ist leicht ungenau.
+1. Drucker **Flashforge Adventurer 5M** wählen, als Prozess z. B.
+   **0.20mm Standard @Flashforge AD5M 0.4 Nozzle**.
+2. Diese Einstellungen ändern:
+
+   | Einstellung | Wert | Warum |
+   |---|---|---|
+   | Others → **Slicing Pipeline Plugin** | **Konische Schichten** | Schaltet das Plugin ein |
+   | **Arc fitting** | **aus** | Bögen kann das Plugin nicht umrechnen |
+   | **Z-Hop-Typ** | **Normal** oder **Slope** | *Spiral* geht nicht, *Auto* benutzt manchmal Spiral |
+   | **Make overhangs printable** | **aus** | Würde das Modell verfälschen |
+   | **Spiral vase** (Vasenmodus) | **aus** | Wird nicht unterstützt |
+   | **Support** | **aus** | Die Stützen sollen ja wegfallen |
+
+3. Profil unter einem neuen Namen speichern, z. B. **AD5M Konisch 15°**.
+
+Stellst du etwas davon falsch ein, passiert nichts Schlimmes: Das Plugin
+bricht das Slicen mit einer Meldung ab, die sagt, was zu ändern ist.
+
+---
+
+## Schritt 2: Ein Teil drucken (jedes Mal)
+
+1. **Modell laden** und fertig **ausrichten und skalieren**. Das geht später
+   nicht mehr.
+2. Oben das Profil **AD5M Konisch 15°** wählen. (Das Plugin liest daraus die
+   Höhe der ersten Schicht.)
+3. **Plugins → Konisch vorbereiten** ausführen. Ein Fenster zeigt, wo die neue
+   Datei liegt. Sie heißt z. B. `pilz_konisch_a15_z0.2.stl` und liegt
+   normalerweise neben deinem Original.
+4. **Diese neue STL importieren** und **das Original von der Platte löschen**.
+   Das neue Modell sieht verzogen aus (die Ränder sind hochgebogen). **Das ist
+   richtig so.** Nicht drehen, nicht skalieren, nur verschieben ist erlaubt.
+5. **Slicen.**
+6. **Exportieren** oder an den Drucker senden. Erst in diesem Moment rechnet
+   das Plugin den G-Code in Kegelschichten um.
+7. **Drucken und beim ersten Mal zuschauen.**
+
+### Das sieht komisch aus, ist aber normal
+
+- **Die Vorschau in Orca zeigt das verzogene Modell.** Den echten Druck
+  siehst du, wenn du die exportierte `.gcode`-Datei wieder in Orca öffnest.
+- **Der Druck dauert länger als angezeigt.** Das Bett fährt ständig auf und
+  ab, und der Drucker bremst dafür von selbst ab.
+- **Die Oberseite hat feine Ringe**, und die untersten Schichten über der
+  ersten sind dünner. Die erste Schicht selbst bleibt ganz normal flach.
+
+---
+
+## Wenn etwas nicht klappt
+
+| Meldung oder Problem | Lösung |
+|---|---|
+| „… ist nicht konisch vorbereitet“ | Du slicst das Original. Erst *Konisch vorbereiten* ausführen, die neue STL importieren, das Original löschen. Oder: Du willst normal drucken, dann ein anderes Prozessprofil wählen. |
+| „… wurde für 15° / erste Schicht 0.2 mm vorbereitet, eingestellt sind …“ | Winkel oder erste Schichthöhe wurden danach geändert. Vom Original aus neu vorbereiten. |
+| „… wurde nach dem Vorbereiten gedreht oder skaliert“ | Das Original drehen/skalieren und neu vorbereiten. |
+| „… nur mit genau einem Objekt pro Platte“ | Nur ein Teil und nur eine Kopie auf die Platte. |
+| „Bitte 'Arc fitting' ausschalten“ / „Spiral“ / „Bögen (G2/G3)“ | Im Profil Arc fitting aus und Z-Hop-Typ auf *Normal* oder *Slope* stellen. |
+| „Make overhangs printable“ / „Vasenmodus“ | Die genannte Einstellung im Profil ausschalten. |
+| Die exportierte G-Code-Datei ist fast leer und enthält „FEHLER“ | Absicht: Beim Umrechnen ging etwas schief, und ein falscher Druck soll nie starten. Die Meldung in der Datei sagt, warum. |
+| Kein Menü **Plugins** | OrcaSlicer ist älter als 2.5. Aktualisieren. |
+| Düse oder Lüfterkanal streift das Teil | Sofort abbrechen und einen kleineren Winkel nehmen (siehe unten). |
+
+---
 
 ## Kegelwinkel und Kollision
 
-Bei geneigten Schichten liegt bergauf (Richtung Achse) schon gedrucktes
-Material höher als die Düsenspitze. Der Druckkopf muss deshalb überall
-oberhalb eines Kegels mit Winkel α um die Düsenspitze bleiben:
+Bei schrägen Schichten liegt Richtung Teilemitte schon gedrucktes Material
+**höher** als die Düsenspitze. Der Druckkopf darf dort nicht anstoßen. Wie
+steil du gehen darfst, hängt von deinem Druckkopf ab:
 
-    max. Winkel = arctan(h / d)
+    größter erlaubter Winkel = arctan(h / d)
 
-Dabei ist **h** die Höhe des tiefsten Kopfteils (Heizblock-Socke, Lüfterkanal)
-über der Düsenspitze und **d** sein waagrechter Abstand zur Düsenmitte. Miss
-das an deinem AD5M nach und lass Reserve. Der Standardwert **15°** ist bewusst
-vorsichtig. Mehr als 30° lässt das Plugin nicht zu. Fang mit einem kleinen
-Teil an und beobachte die ersten Zentimeter.
+- **h** = wie viel höher als die Düsenspitze das tiefste Teil am Kopf sitzt
+  (Silikonsocke, Lüfterkanal)
+- **d** = wie weit dieses Teil waagrecht von der Düsenmitte weg ist
 
-## Kommandozeile
+Beispiel: Der Lüfterkanal sitzt 3 mm höher und 10 mm neben der Düse →
+arctan(3/10) ≈ 16°. Miss das an deinem eigenen Drucker nach und lass Reserve.
 
-Dieselbe Datei funktioniert auch ohne Plugin-System:
+- **15°** ist der Standard und bewusst vorsichtig. Für den AD5M wurde er
+  nicht ausgemessen, daher: erster Druck unter Aufsicht.
+- Mehr als **30°** lässt das Plugin nicht zu.
+- Den Winkel änderst du unter **Plugins → Konische Schichten → Config**:
+  `{"cone_angle_deg": 15}`. Danach jedes Teil **neu vorbereiten**.
+
+Die Kegelachse liegt immer in der **Mitte des Modells**. Überhänge müssen
+also von der Mitte weg zeigen, damit sie profitieren.
+
+---
+
+## Wie es funktioniert (für Neugierige)
+
+Orca kann nicht auf Kegelflächen slicen. Das Plugin nutzt deshalb einen
+bekannten Trick (Wüthrich et al., *A Novel Slicing Strategy to Print Overhangs
+without Support Material*, Applied Sciences 2021):
+
+1. **Konisch vorbereiten** verbiegt das Modell: `z' = z + min(r·tan α, z − z₀)`
+   (r = Abstand zur Kegelachse, z₀ = Höhe der ersten Schicht). Orca slict das
+   verbogene Modell ganz normal, mit seinen eigenen Wänden, Füllungen und
+   Nähten.
+2. **Konische Schichten** biegt beim Export jede Bewegung im G-Code wieder
+   zurück. Aus den flachen Schichten werden so Kegel. Lange Bewegungen werden
+   unterteilt (Abweichung höchstens 0,01 mm), auch Leerfahrten, und die
+   Extrusionsmenge wird an die echte Schichtdicke angepasst.
+
+Die erste Schicht bleibt flach. Darüber wächst der Kegel aus einer Rampe mit
+halb so dicken Schichten heraus.
+
+## Für Fortgeschrittene: Kommandozeile
+
+Dieselbe Datei läuft auch ohne Orca-Plugin-System (Python ≥ 3.12):
 
 ```
 python nonplanar_conical.py prepare modell.stl -a 15 --z0 0.2
 python nonplanar_conical.py gcode druck.gcode -a 15        # ändert die Datei direkt
 ```
 
-Auf älteren Orca-Versionen kannst du den zweiten Befehl als klassisches
+Auf älteren Orca-Versionen lässt sich der zweite Befehl als
 *Post-processing script* eintragen:
 
 ```
 "C:\Pfad\zu\python.exe" "C:\Pfad\zu\nonplanar_conical.py" gcode -a 15;
 ```
 
-## Tests
+Tests:
 
 ```
 python -m unittest discover -s tests
 ```
-
-Geprüft werden die Transformation (Hin- und Rückweg), dass das Mesh nach dem
-Unterteilen geschlossen bleibt, die G-Code-Rücktransformation (Kegelfläche,
-Extrusionsmengen, relatives und absolutes E, Achsenerkennung ohne
-Skirt/Brim) und die Plugin-Logik gegen ein nachgebautes `orca`-Modul.

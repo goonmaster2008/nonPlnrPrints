@@ -187,6 +187,8 @@ class GcodeTest(unittest.TestCase):
         lines.insert(lines.index(";TYPE:Outer wall\n"), ";TYPE:Skirt\nG1 X-80 Y-80 E3\nG1 X20 Y30\n")
         lines = "".join(lines).splitlines(keepends=True)
         self.assertEqual(nc.detect_axis(lines), (30.0, 30.0))
+        lines.remove(";TYPE:Custom\n")  # purge line in an untagged start G-code
+        self.assertEqual(nc.detect_axis(lines), (30.0, 30.0))
 
     def test_refuses_arcs_and_double_transform(self):
         arcs = [l.replace("G1 X10 Y0 E1.0", "G2 X10 Y0 I10 J0 E1.0") for l in self.lines]
@@ -290,6 +292,7 @@ class PluginTest(unittest.TestCase):
             (slice_ctx(good, part=Part(scale=(1.2, 1.2, 1.2))), "gedreht oder skaliert"),
             (slice_ctx(good, config={"enable_arc_fitting": "1"}), "Arc fitting"),
             (slice_ctx(good, config={"z_hop_types": "Spiral Lift"}), "Spiral"),
+            (slice_ctx(good, config={"make_overhang_printable": "1"}), "Make overhangs printable"),
         ]:
             res = cap.execute(ctx)
             self.assertEqual(res.status, "fatal", why)
