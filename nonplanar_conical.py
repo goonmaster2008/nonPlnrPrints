@@ -4,9 +4,9 @@
 #
 # [tool.orcaslicer.plugin]
 # name = "Nonplanar Conical"
-# description = "Konische (nicht-planare) Schichten: Überhänge bis ca. 45° + Kegelwinkel ohne Stützen drucken. Abgestimmt auf den Flashforge Adventurer 5M."
+# description = "Conical (non-planar) layers: print overhangs up to about 45° + cone angle without supports. Tuned for the Flashforge Adventurer 5M."
 # author = "nonplanar"
-# version = "0.1.1"
+# version = "0.2.0"
 # ///
 """Conical (non-planar) slicing for OrcaSlicer.
 
@@ -53,12 +53,12 @@ MESH_MAX_EDGE_MM = 1.0       # subdivision before deforming (curvature of cones)
 GCODE_TOLERANCE_MM = 0.01    # max Z deviation of a subdivided move from the cone
 GCODE_MAX_SEGMENT_MM = 2.0   # hard cap on subdivided move length
 GCODE_TAG = "; nonplanar-conical"
-NAME_RE = re.compile(r"_konisch_a(\d+(?:\.\d+)?)_z(\d+(?:\.\d+)?)")
+NAME_RE = re.compile(r"_(?:conical|konisch)_a(\d+(?:\.\d+)?)_z(\d+(?:\.\d+)?)")
 AXIS_IGNORED_FEATURES = ("custom", "skirt", "brim", "support", "prime tower", "wipe tower")
 
 
 class ConicalError(Exception):
-    """A problem the user has to fix; the message is shown to them (German)."""
+    """A problem the user has to fix; the message is shown to them."""
 
 
 # --------------------------------------------------------------------------
@@ -67,9 +67,9 @@ class ConicalError(Exception):
 class Cone:
     def __init__(self, angle_deg: float, z0: float):
         if not 0.0 < angle_deg <= MAX_ANGLE_DEG:
-            raise ConicalError(f"Kegelwinkel muss zwischen 0 und {MAX_ANGLE_DEG:g}° liegen (ist {angle_deg:g}°).")
+            raise ConicalError(f"Cone angle must be between 0 and {MAX_ANGLE_DEG:g}° (is {angle_deg:g}°).")
         if not z0 > 0.0:
-            raise ConicalError(f"Erste Schichthöhe muss > 0 sein (ist {z0:g}).")
+            raise ConicalError(f"First layer height must be > 0 (is {z0:g}).")
         self.angle_deg = float(angle_deg)
         self.z0 = float(z0)
         self.t = math.tan(math.radians(angle_deg))
@@ -88,7 +88,7 @@ class Cone:
         return self.z0 + (zs - self.z0) / (1.0 + RAMP), 1.0 / (1.0 + RAMP)
 
     def name_suffix(self) -> str:
-        return f"_konisch_a{self.angle_deg:g}_z{self.z0:g}"
+        return f"_conical_a{self.angle_deg:g}_z{self.z0:g}"
 
 
 def parse_name(name: str) -> tuple[float, float] | None:
@@ -166,7 +166,7 @@ def conical_mesh(verts: list, tris: list, cone: Cone, max_edge: float = MESH_MAX
     axis at X=Y=0 and its lowest point at Z=0. Returns (verts, tris).
     """
     if not tris:
-        raise ConicalError("Das Modell hat keine Dreiecke.")
+        raise ConicalError("The model has no triangles.")
     xs, ys, zs = zip(*verts)
     cx, cy, z_min = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, min(zs)
     centred = [(x - cx, y - cy, z - z_min) for x, y, z in verts]
@@ -231,7 +231,7 @@ def _words(code: str) -> dict:
         try:
             out[w[0].upper()] = float(w[1:])
         except (ValueError, IndexError):
-            raise ConicalError(f"Unbekannter G-Code-Parameter '{w}' in '{code.strip()}'.")
+            raise ConicalError(f"Unknown G-code parameter '{w}' in '{code.strip()}'.")
     return out
 
 
@@ -240,7 +240,7 @@ def _region(lines: list) -> tuple[int, int]:
     end G-code that follows the last layer."""
     starts = [i for i, l in enumerate(lines) if l.startswith(";LAYER_CHANGE")]
     if not starts:
-        raise ConicalError("Kein ';LAYER_CHANGE' im G-Code gefunden - ist das ein OrcaSlicer-G-Code?")
+        raise ConicalError("No ';LAYER_CHANGE' found in the G-code - is this OrcaSlicer G-code?")
     end = len(lines)
     for i in range(starts[-1], len(lines)):
         if lines[i].startswith(";TYPE:Custom") or lines[i].startswith("; EXECUTABLE_BLOCK_END"):
@@ -288,7 +288,7 @@ def detect_axis(lines: list) -> tuple[float, float]:
                 by0, by1 = min(by0, y, ny), max(by1, y, ny)
             x, y = nx, ny
     if bx0 == math.inf:
-        raise ConicalError("Keine Extrusionen des Bauteils im G-Code gefunden.")
+        raise ConicalError("No extrusions of the part found in the G-code.")
     return (bx0 + bx1) / 2, (by0 + by1) / 2
 
 
@@ -307,7 +307,7 @@ def transform_gcode(lines: list, cone: Cone, axis: tuple[float, float] | None = 
     and end G-code pass through untouched.
     """
     if any(l.startswith(GCODE_TAG) for l in lines[:50]):
-        raise ConicalError("Dieser G-Code wurde bereits konisch transformiert.")
+        raise ConicalError("This G-code has already been conically transformed.")
     start, end = _region(lines)
     ax, ay = axis if axis is not None else detect_axis(lines)
 
@@ -369,10 +369,10 @@ def transform_gcode(lines: list, cone: Cone, axis: tuple[float, float] | None = 
         comment = (" ;" + rest.rstrip("\r\n")) if sep else ""
         cmd = code.split(None, 1)[0].upper()
         if cmd in ("G2", "G3"):
-            raise ConicalError("Bögen (G2/G3) werden nicht unterstützt: bitte 'Arc fitting' "
-                               "ausschalten und keinen 'Spiral'-Z-Hop verwenden.")
+            raise ConicalError("Arcs (G2/G3) are not supported: please turn off 'Arc fitting' "
+                               "and do not use the 'Spiral' Z-hop.")
         if cmd in ("G28", "G29") or (cmd == "G92" and any(k in code.upper() for k in "XYZ")):
-            raise ConicalError(f"'{code}' innerhalb der Schichten wird nicht unterstützt.")
+            raise ConicalError(f"'{code}' inside the layers is not supported.")
         if cmd == "G92":
             w = _words(code)
             if "E" in w:
@@ -506,7 +506,7 @@ if orca is not None:
         """Validates the plate while slicing and maps the exported G-code onto cones."""
 
         def get_name(self):
-            return "Konische Schichten"
+            return "Conical Layers"
 
         def get_default_config(self):
             return {"cone_angle_deg": DEFAULT_ANGLE_DEG}
@@ -532,30 +532,30 @@ if orca is not None:
             params = parse_name(mo.name)
             if params is None:
                 raise ConicalError(
-                    f"'{mo.name}' ist nicht konisch vorbereitet. Erst Plugins > 'Konisch vorbereiten' "
-                    "ausführen und die erzeugte STL importieren - oder im Prozessprofil das "
-                    "Slicing-Pipeline-Plugin abschalten.")
+                    f"'{mo.name}' is not prepared for conical printing. Run Plugins > 'Prepare Conical' "
+                    "first and import the STL it creates - or turn off the Slicing Pipeline "
+                    "Plugin in the process profile.")
             if abs(params[0] - angle) > 1e-6 or abs(params[1] - z0) > 1e-6:
                 raise ConicalError(
-                    f"'{mo.name}' wurde für {params[0]:g}° / erste Schicht {params[1]:g} mm vorbereitet, "
-                    f"eingestellt sind {angle:g}° / {z0:g} mm. Bitte neu vorbereiten.")
+                    f"'{mo.name}' was prepared for {params[0]:g}° / first layer {params[1]:g} mm, "
+                    f"but the settings are {angle:g}° / {z0:g} mm. Please prepare it again.")
             if len(ctx.print.objects()) != 1:
-                raise ConicalError("Konische Schichten gehen nur mit genau einem Objekt pro Platte.")
+                raise ConicalError("Conical layers only work with exactly one object per plate.")
             for part in [*mo.instances(), *mo.volumes()]:
                 if any(abs(a) > 1e-4 for a in part.rotation()) or \
                         any(abs(s - 1) > 1e-4 for s in part.scaling_factor()):
                     raise ConicalError(
-                        f"'{mo.name}' wurde nach dem Vorbereiten gedreht oder skaliert. Bitte das "
-                        "Original drehen/skalieren und neu vorbereiten.")
+                        f"'{mo.name}' was rotated or scaled after preparing. Please rotate/scale "
+                        "the original and prepare it again.")
             if str(ctx.config_value("enable_arc_fitting")).lower() not in ("0", "false", "disabled", "none"):
-                raise ConicalError("Bitte 'Arc fitting' ausschalten.")
+                raise ConicalError("Please turn off 'Arc fitting'.")
             if "spiral" in str(ctx.config_value("z_hop_types")).lower():
-                raise ConicalError("Bitte keinen 'Spiral'-Z-Hop verwenden (Auto/Normal/Slope geht).")
+                raise ConicalError("Please do not use the 'Spiral' Z-hop (use Normal or Slope).")
             if str(ctx.config_value("make_overhang_printable")).lower() in ("1", "true"):
                 # It adds material to the deformed mesh, which would come out distorted.
-                raise ConicalError("Bitte 'Make overhangs printable' (Überhänge druckbar machen) ausschalten.")
+                raise ConicalError("Please turn off 'Make overhangs printable'.")
             if str(ctx.config_value("spiral_mode")).lower() in ("1", "true"):
-                raise ConicalError("Vasenmodus wird mit konischen Schichten nicht unterstützt.")
+                raise ConicalError("Spiral vase mode is not supported with conical layers.")
 
         def _post_process(self, ctx):
             try:
@@ -564,7 +564,7 @@ if orca is not None:
             except Exception as exc:
                 # Never leave a planar G-code of a deformed part behind.
                 with open(ctx.gcode_path, "w", encoding="utf-8") as f:
-                    f.write(f"; nonplanar-conical FEHLER: {exc}\n")
+                    f.write(f"; nonplanar-conical ERROR: {exc}\n")
                 raise
             return orca.ExecutionResult.success(info)
 
@@ -572,13 +572,13 @@ if orca is not None:
         """Writes a deformed STL of every object on the plate for import."""
 
         def get_name(self):
-            return "Konisch vorbereiten"
+            return "Prepare Conical"
 
         def execute(self):
             try:
                 return self._run()
             except ConicalError as exc:
-                orca.host.ui.message(str(exc), title="Konisch vorbereiten", icon="error")
+                orca.host.ui.message(str(exc), title="Prepare Conical", icon="error")
                 return _fail(str(exc))
 
         def _run(self):
@@ -605,7 +605,7 @@ if orca is not None:
                     tris += (t + len(verts)).tolist()
                     verts += world.tolist()
                 v2, t2 = conical_mesh(verts, tris, cone)
-                name = re.sub(r"[^\w.-]+", "_", os.path.splitext(mo.name)[0]) or "objekt"
+                name = re.sub(r"[^\w.-]+", "_", os.path.splitext(mo.name)[0]) or "object"
                 name += cone.name_suffix() + ".stl"
                 # Next to the source file if allowed (Orca asks once), else plugin storage.
                 dirs = [os.path.dirname(mo.input_file)] if mo.input_file else []
@@ -617,19 +617,19 @@ if orca is not None:
                     written.append(os.path.join(d, name))
                     break
                 else:
-                    raise ConicalError(f"Konnte '{name}' nicht speichern.")
+                    raise ConicalError(f"Could not save '{name}'.")
             if not written:
-                orca.host.ui.message("Kein (noch nicht vorbereitetes) Objekt auf der Platte gefunden.",
-                                     title="Konisch vorbereiten")
+                orca.host.ui.message("No object (that is not already prepared) found on the plate.",
+                                     title="Prepare Conical")
                 return orca.ExecutionResult.skipped("nothing to prepare")
             orca.host.ui.message(
-                f"Kegelwinkel {angle:g}°, erste Schicht {cone.z0:g} mm.\n\n"
+                f"Cone angle {angle:g}°, first layer {cone.z0:g} mm.\n\n"
                 + "\n".join(written)
-                + "\n\nJetzt: Datei > Importieren > STL, diese Datei laden, das Original löschen, "
-                  "ein Prozessprofil mit dem Slicing-Pipeline-Plugin 'Konische Schichten' wählen "
-                  "und slicen. Die G-Code-Vorschau zeigt das verzerrte Modell - der exportierte "
-                  "G-Code ist konisch.",
-                title="Konisch vorbereiten")
+                + "\n\nNext: File > Import > STL, load this file, delete the original, pick a "
+                  "process profile with the Slicing Pipeline Plugin 'Conical Layers' and "
+                  "slice. The G-code preview shows the warped model - the exported G-code "
+                  "is conical.",
+                title="Prepare Conical")
             return orca.ExecutionResult.success("\n".join(written))
 
     @orca.plugin
@@ -643,17 +643,17 @@ if orca is not None:
 # CLI
 # --------------------------------------------------------------------------
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="Konische Schichten für OrcaSlicer (CLI).")
+    p = argparse.ArgumentParser(description="Conical layers for OrcaSlicer (CLI).")
     sub = p.add_subparsers(dest="cmd", required=True)
-    pp = sub.add_parser("prepare", help="STL für das Slicen verformen")
+    pp = sub.add_parser("prepare", help="deform an STL for slicing")
     pp.add_argument("stl")
     pp.add_argument("-a", "--angle", type=float, default=DEFAULT_ANGLE_DEG)
-    pp.add_argument("--z0", type=float, default=0.2, help="erste Schichthöhe in mm (wie in Orca)")
+    pp.add_argument("--z0", type=float, default=0.2, help="first layer height in mm (as set in Orca)")
     pp.add_argument("-o", "--output")
-    pg = sub.add_parser("gcode", help="G-Code auf Kegel zurückrechnen (ohne -o: in place)")
+    pg = sub.add_parser("gcode", help="map G-code back onto cones (without -o: in place)")
     pg.add_argument("gcode")
     pg.add_argument("-a", "--angle", type=float, default=DEFAULT_ANGLE_DEG)
-    pg.add_argument("--z0", type=float, help="Standard: aus dem G-Code-Konfigblock")
+    pg.add_argument("--z0", type=float, help="default: read from the G-code config block")
     pg.add_argument("-o", "--output")
     args = p.parse_args(argv)
     try:
@@ -665,11 +665,11 @@ def main(argv=None) -> int:
                 with open(args.gcode, encoding="utf-8", errors="replace") as f:
                     value = _gcode_setting(f.readlines(), "initial_layer_print_height")
                 if value is None:
-                    raise ConicalError("Erste Schichthöhe nicht im G-Code gefunden, bitte --z0 angeben.")
+                    raise ConicalError("First layer height not found in the G-code, please pass --z0.")
                 z0 = _first_float(value)
             print(transform_gcode_file(args.gcode, Cone(args.angle, z0), args.output))
     except ConicalError as exc:
-        print(f"Fehler: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0
 

@@ -89,8 +89,8 @@ class ConeTest(unittest.TestCase):
             nc.Cone(15, 0)
 
     def test_name_roundtrip(self):
-        self.assertEqual(nc.parse_name("pilz" + nc.Cone(12.5, 0.25).name_suffix() + ".stl"), (12.5, 0.25))
-        self.assertIsNone(nc.parse_name("pilz.stl"))
+        self.assertEqual(nc.parse_name("mushroom" + nc.Cone(12.5, 0.25).name_suffix() + ".stl"), (12.5, 0.25))
+        self.assertIsNone(nc.parse_name("mushroom.stl"))
 
 
 class MeshTest(unittest.TestCase):
@@ -120,10 +120,10 @@ class MeshTest(unittest.TestCase):
     def test_stl_roundtrip(self):
         verts, tris = models.mushroom()
         with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "pilz.stl")
+            path = os.path.join(d, "mushroom.stl")
             models.write_stl(path, verts, tris)
             out = nc.prepare_stl(path, 15, 0.2)
-            self.assertTrue(out.endswith("pilz_konisch_a15_z0.2.stl"))
+            self.assertTrue(out.endswith("mushroom_conical_a15_z0.2.stl"))
             v2, t2 = nc.read_stl(out)
             self.assertTrue(edges_balanced(t2))
 
@@ -281,15 +281,15 @@ class PluginTest(unittest.TestCase):
     def test_slice_validation(self):
         mod = self.load()
         cap = mod.ConicalLayers()
-        good = "pilz_konisch_a15_z0.2.stl"
+        good = "mushroom_conical_a15_z0.2.stl"
         self.assertEqual(cap.execute(slice_ctx(good)).status, "ok")
         for ctx, why in [
-            (slice_ctx("pilz.stl"), "nicht konisch vorbereitet"),
-            (slice_ctx("pilz_konisch_a10_z0.2.stl"), "Bitte neu vorbereiten"),
-            (slice_ctx(good, config={"initial_layer_print_height": "0.3"}), "Bitte neu vorbereiten"),
-            (slice_ctx(good, objects=2), "genau einem Objekt"),
-            (slice_ctx(good, part=Part(rotation=(0, 0, 0.5))), "gedreht oder skaliert"),
-            (slice_ctx(good, part=Part(scale=(1.2, 1.2, 1.2))), "gedreht oder skaliert"),
+            (slice_ctx("mushroom.stl"), "not prepared for conical printing"),
+            (slice_ctx("mushroom_conical_a10_z0.2.stl"), "Please prepare it again"),
+            (slice_ctx(good, config={"initial_layer_print_height": "0.3"}), "Please prepare it again"),
+            (slice_ctx(good, objects=2), "exactly one object"),
+            (slice_ctx(good, part=Part(rotation=(0, 0, 0.5))), "rotated or scaled"),
+            (slice_ctx(good, part=Part(scale=(1.2, 1.2, 1.2))), "rotated or scaled"),
             (slice_ctx(good, config={"enable_arc_fitting": "1"}), "Arc fitting"),
             (slice_ctx(good, config={"z_hop_types": "Spiral Lift"}), "Spiral"),
             (slice_ctx(good, config={"make_overhang_printable": "1"}), "Make overhangs printable"),
@@ -302,7 +302,7 @@ class PluginTest(unittest.TestCase):
         mod = self.load()
         cap = mod.ConicalLayers()
         cap._config = '{"cone_angle_deg": 10}'
-        self.assertEqual(cap.execute(slice_ctx("pilz_konisch_a10_z0.2.stl")).status, "ok")
+        self.assertEqual(cap.execute(slice_ctx("mushroom_conical_a10_z0.2.stl")).status, "ok")
 
     def test_post_process_transforms_or_blanks_file(self):
         mod = self.load()
@@ -333,13 +333,13 @@ class PluginTest(unittest.TestCase):
             vol = types.SimpleNamespace(is_model_part=lambda: True, mesh=lambda: mesh,
                                         matrix=lambda: np.eye(4))
             inst = types.SimpleNamespace(matrix=lambda: np.diag([1.0, 1.0, 1.0, 1.0]))
-            mo = types.SimpleNamespace(name="Pilz.stl", input_file=os.path.join(d, "Pilz.stl"),
+            mo = types.SimpleNamespace(name="Mushroom.stl", input_file=os.path.join(d, "Mushroom.stl"),
                                        instance_count=lambda: 1, instance=lambda i: inst,
                                        volumes=lambda: [vol])
             mod = self.load(model=types.SimpleNamespace(objects=lambda: [mo]))
             res = mod.PrepareConical().execute()
             self.assertEqual(res.status, "ok", self.orca.messages)
-            out = os.path.join(d, "Pilz_konisch_a15_z0.2.stl")
+            out = os.path.join(d, "Mushroom_conical_a15_z0.2.stl")
             self.assertEqual(res.message, out)
             v2, t2 = nc.read_stl(out)
             self.assertTrue(edges_balanced(t2))
